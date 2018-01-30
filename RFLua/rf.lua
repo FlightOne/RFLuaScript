@@ -8,13 +8,13 @@
 --
 --THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
---Version 1.0
+--Version 2.0
 
 --###############################Variables#######################################################
 local horizontalCharSpacing = 6
 local verticalCharSpacing   = 10
-local currentScreen = 8
-local currentRow = 4
+local currentScreen = 0
+local currentRow = 0
 local lastRow = 0
 local rxBuffer  = {}
 local xyBuffer  = {}
@@ -67,7 +67,9 @@ end
 
 local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
-	
+	if currentScreen == 0 then
+		currentScreen = 8
+	end
 	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], 0)
 	
 	for i=1,5,1 do
@@ -99,23 +101,19 @@ local function ChangeData(data)
 end
 
 local function ReceiveSport()
-	--local sId, fId, daId, value = sportTelemetryPop()
-	local sId = 0x0D
-	local fId = 0x32
-	local daId = 0x32
-	local value = 1
+	local sId, fId, daId, value = sportTelemetryPop()
+	--local sId = 0x0D
+	--local fId = 0x32
+	--local daId = 0x32
+	--local value = 1
 	if sId == 0x0D and fId == 0x32 then
 		rxBuffer = {}
 		rxBuffer[1] = bit32.band(daId,0xFF)
 		rxBuffer[2] = bit32.band(bit32.rshift(daId,8),0xFF)
-		--rxBuffer[3] = bit32.band(value,0xFF)
-		--rxBuffer[4] = bit32.band(bit32.rshift(value,8 ),0xFF)
-		--rxBuffer[5] = bit32.band(bit32.rshift(value,16),0xFF)
-		--rxBuffer[6] = bit32.band(bit32.rshift(value,24),0xFF)
-		rxBuffer[3] = 2
-		rxBuffer[4] = 3
-		rxBuffer[5] = 255
-		rxBuffer[6] = 0
+		rxBuffer[3] = bit32.band(value,0xFF)
+		rxBuffer[4] = bit32.band(bit32.rshift(value,8 ),0xFF)
+		rxBuffer[5] = bit32.band(bit32.rshift(value,16),0xFF)
+		rxBuffer[6] = bit32.band(bit32.rshift(value,24),0xFF)
 		dataCombined = ( (bit32.lshift(rxBuffer[6],8)) + rxBuffer[5]) --turns the two 1 byte numbers into 1 16 bit number
 		return true
 	else
@@ -124,10 +122,15 @@ local function ReceiveSport()
 end
 
 local function ProccessCommand()
+	if currentRow == 0 then 
+		currentRow = 5
+	end
 	if rxBuffer[3] == 1 then
 		--we are changing screens
 		--set first row based off last 2 bytes
 		-- fc will then send 4 more packets which will set the 4 next lines
+		lcd.clear()
+		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
 		HandleMenuChoice(rxBuffer[3])
 		currentRow = 1
 		ChangeData(dataCombined) --turns the two 1 byte numbers into 1 16 bit number
@@ -186,16 +189,22 @@ local function DrawScreen()
 	lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
 	DrawBuffers()
 	if getValue("RSSI") == 0 then
-		--lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
-		ProccessCommand()
+		lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
+		--ProccessCommand()
 	end
 end
 
 local function RunUi(event)
+
+
 	if ReceiveSport() then
-		ProcessSport()
+		ProccessCommand()
 	end
-	DrawScreen()
+	if getValue("RSSI") == 0 then
+		lcd.clear()
+		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
+		lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
+	end
 	return 0
 end
 
