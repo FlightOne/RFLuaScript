@@ -67,8 +67,6 @@ end
 
 local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
-	if currentScreen == 0 then
-		currentScreen = 8
 	end
 	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], 0)
 	
@@ -144,7 +142,8 @@ local function ProccessCommand()
 		-- fc will then send 4 more packets which will set the 4 next lines
 		lcd.clear()
 		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
-		HandleMenuChoice(rxBuffer[3])
+		HandleMenuChoice(rxBuffer[4])
+		currentScreen = rxBuffer[4]
 		currentRow = 1
 		ChangeData(dataCombined) --turns the two 1 byte numbers into 1 16 bit number
 		currentRow = 0
@@ -214,6 +213,7 @@ local function RunUi(event)
 
 	if ReceiveSport() then
 		ProccessCommand()
+		HandleMenuChoice(currentScreen)
 		DrawCursor()
 	end
 	if getValue("RSSI") == 0 then
