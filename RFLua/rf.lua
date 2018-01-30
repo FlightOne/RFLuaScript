@@ -99,16 +99,24 @@ local function ChangeData(data)
 end
 
 local function ReceiveSport()
-	local sId, fId, daId, value = sportTelemetryPop()
+	--local sId, fId, daId, value = sportTelemetryPop()
+	local sId = 0x0D
+	local fId = 0x32
+	local daId = 0x32
+	local value = 1
 	if sId == 0x0D and fId == 0x32 then
 		rxBuffer = {}
-		rxBuffer[0] = bit32.band(daId,0xFF)
-		rxBuffer[1] = bit32.band(bit32.rshift(daId,8),0xFF)
-		rxBuffer[2] = bit32.band(value,0xFF)
-		rxBuffer[3] = bit32.band(bit32.rshift(value,8 ),0xFF)
-		rxBuffer[4] = bit32.band(bit32.rshift(value,16),0xFF)
-		rxBuffer[5] = bit32.band(bit32.rshift(value,24),0xFF)
-		dataCombined = ( (bit32.lshift(rxBuffer[5],8)) + rxBuffer[4]) --turns the two 1 byte numbers into 1 16 bit number
+		rxBuffer[1] = bit32.band(daId,0xFF)
+		rxBuffer[2] = bit32.band(bit32.rshift(daId,8),0xFF)
+		--rxBuffer[3] = bit32.band(value,0xFF)
+		--rxBuffer[4] = bit32.band(bit32.rshift(value,8 ),0xFF)
+		--rxBuffer[5] = bit32.band(bit32.rshift(value,16),0xFF)
+		--rxBuffer[6] = bit32.band(bit32.rshift(value,24),0xFF)
+		rxBuffer[3] = 2
+		rxBuffer[4] = 3
+		rxBuffer[5] = 255
+		rxBuffer[6] = 0
+		dataCombined = ( (bit32.lshift(rxBuffer[6],8)) + rxBuffer[5]) --turns the two 1 byte numbers into 1 16 bit number
 		return true
 	else
 		return false
@@ -116,33 +124,34 @@ local function ReceiveSport()
 end
 
 local function ProccessCommand()
-	if rxBuffer[2] == 1 then
+	if rxBuffer[3] == 1 then
 		--we are changing screens
 		--set first row based off last 2 bytes
 		-- fc will then send 4 more packets which will set the 4 next lines
 		HandleMenuChoice(rxBuffer[3])
 		currentRow = 1
-		--ChangeData( (rxBuffer[5]<<8) + rxBuffer[4] ) --turns the two 1 byte numbers into 1 16 bit number
+		ChangeData(dataCombined) --turns the two 1 byte numbers into 1 16 bit number
 		currentRow = 0
 	end
-	if rxBuffer[2] == 2 then
+	if rxBuffer[3] == 2 then
 		--we are changing data
 		-- 2nd byte is the row to set and last two bytes are the data
-		currentRow=rxBuffer[3]
-		--ChangeData( (rxBuffer[5]<<8) + rxBuffer[4] )
+		currentRow=rxBuffer[4]
+		ChangeData( dataCombined)
 
 	end	
-	if rxBuffer[2] == 3 then
+	if rxBuffer[3] == 3 then
 		--we are exiting
 		--set screen to init
+		HandleMenuChoice(9) --9 is ldle
 	end
 end
 local function ProcessSport()
 	local x=0
 	local y=0
 	local z=0
-	if (rxBuffer[0] == CMD_PRINT) then
-		z = rxBuffer[1]
+	if (rxBuffer[1] == CMD_PRINT) then
+		z = rxBuffer[2]
 		y = math.floor(z / 24)
 		x = (z - (y * 24))
 		for i=0,3,1 do
@@ -151,7 +160,7 @@ local function ProcessSport()
 			end
 			xyBuffer[x+i][y] = string.char(rxBuffer[2+i])
 		end
-	elseif (rxBuffer[0] == CMD_ERASE) then
+	elseif (rxBuffer[1] == CMD_ERASE) then
 		xyBuffer = {}
 	end
 end
@@ -178,12 +187,7 @@ local function DrawScreen()
 	DrawBuffers()
 	if getValue("RSSI") == 0 then
 		--lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
-		--lcd.drawText(0*horizontalCharSpacing,0*verticalCharSpacing,"Raceflight One Program Menu", INVERS+BLINK)
-		HandleMenuChoice(9)
-		--DrawCursor()
-		--ChangeData("50") 
-		--lcd.drawText(0,0,titleScreenArray[1], INVERS+BLINK)
-		--DrawPidScreen(pidScreenArray)
+		ProccessCommand()
 	end
 end
 
