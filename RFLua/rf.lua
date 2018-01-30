@@ -13,12 +13,12 @@
 --###############################Variables#######################################################
 local horizontalCharSpacing = 6
 local verticalCharSpacing   = 10
-local currentScreen = 0
-local currentRow = 0
-local lastRow = 0
+local currentScreen = 1
+local currentRow = 1
+local lastRow = 1
 local rxBuffer  = {}
 local xyBuffer  = {}
-local dataCombined = 0
+local dataCombined = 1
 local CMD_PRINT = 0x12
 local CMD_ERASE = 0x13
 
@@ -97,7 +97,7 @@ local function DrawCursor() --this will draw the cursor based on current row
 end
 
 local function ChangeData(data)
-	lcd.drawText( (rowOffset[currentScreen][currentRow] -1)*horizontalCharSpacing,currentRow*verticalCharSpacing,data, 0)
+	lcd.drawText( ((rowOffset[currentScreen][currentRow]) -1)*horizontalCharSpacing,currentRow*verticalCharSpacing,data, 0)
 end
 
 local function ReceiveSport()
@@ -106,7 +106,8 @@ local function ReceiveSport()
 	--local fId = 0x32
 	--local daId = 0x32
 	--local value = 1
-	if sId == 0x0D and fId == 0x32 then
+	--if sId == 0x0D and fId == 0x32 then
+	if fId == 0x32 then
 		rxBuffer = {}
 		rxBuffer[1] = bit32.band(daId,0xFF)
 		rxBuffer[2] = bit32.band(bit32.rshift(daId,8),0xFF)
@@ -122,8 +123,20 @@ local function ReceiveSport()
 end
 
 local function ProccessCommand()
-	if currentRow == 0 then 
+	if currentRow < 0 then 
 		currentRow = 5
+	end
+
+	if currentRow > 5 then 
+		currentRow = 1
+	end
+
+	if currentScreen > 8 then 
+		currentScreen = 1
+	end
+
+	if currentScreen < 1 then 
+		currentScreen = 8
 	end
 	if rxBuffer[3] == 1 then
 		--we are changing screens
@@ -143,9 +156,11 @@ local function ProccessCommand()
 		ChangeData( dataCombined)
 
 	end	
-	if rxBuffer[3] == 3 then
+	if rxBuffer[3] == 3  then --or rxBuffer[3] == 0
 		--we are exiting
 		--set screen to init
+		lcd.clear()
+		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
 		HandleMenuChoice(9) --9 is ldle
 	end
 end
@@ -199,6 +214,7 @@ local function RunUi(event)
 
 	if ReceiveSport() then
 		ProccessCommand()
+		DrawCursor()
 	end
 	if getValue("RSSI") == 0 then
 		lcd.clear()
