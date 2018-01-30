@@ -23,7 +23,13 @@ local CMD_ERASE = 0x13
 local titleScreenArray = { "Yaw PIDs", "Roll PIDs", "Pitch PIDs", "Yaw Rate", "Roll Rate", "Pitch Rate", "General", "VTX" }
 
 --need to preserve a space before all the screen rows so that theres room for the cursor
-local PidsScreenArray  = { " P: "," I: "," D: "," Filter: "," GA: "," Save"," Exit" } 
+-- these will need to match what the FC expects, each array will be used to draw a buffered screen, with the data being filled in by the FC and logic and Cursor moving done by FC
+local pidScreenArray  = { " P: "," I: "," D: "," Filter: "," GA: "," Save"," Exit" } --this will be used for multiple pid screens
+local rateScreenArray  = { " Rate: "," Expo: "," Acro: ","  "," DeadBand: "," Save"," Exit" } --this will be used for multiple rate screens
+local generalScreenArray = = { " RcSmooth: "," I Limit: "," D Limit: "," CG: ","  "," Save"," Exit" } --this will be used for the general page
+local generalScreenArray = = { " Band: "," Channel: "," Power: "," Exit Pitmode ","  "," Save"," Exit" } --this will be used for the VTX page
+
+
 	
 
 --############################Functions########################################################
