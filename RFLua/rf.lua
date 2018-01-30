@@ -13,17 +13,29 @@
 --###############################Variables#######################################################
 local horizontalCharSpacing = 6
 local verticalCharSpacing   = 10
-local currentScreen = 1
+local currentScreen = 8
 local currentRow = 4
+local lastRow = 0
 local rxBuffer  = {}
 local xyBuffer  = {}
+local dataCombined = 0
 local CMD_PRINT = 0x12
 local CMD_ERASE = 0x13
 
 
+local CMD_CHANGE_SCREEN = 1
+local CMD_CHANGE_DATA  =  2
+local CMD_EXIT  = 3 
+
+
 --FIX would like to move these arrays to a seperate file at some point
+--first byte command rest of bytes differ depending on command 
+--if command is change screen, second byte is screen rest is data
+--if command is print data second byte is row rest is data
+--if command is exit screen exits
+
 --each needs a space for the > to go in
-local titleScreenArray = { "  Yaw PIDs", "  Roll PIDs", "  Pitch PIDs", "  Yaw Rate", "  Roll Rate", "  Pitch Rate", "  General", "  VTX" }
+local titleScreenArray = { "  Yaw PIDs", "  Roll PIDs", "  Pitch PIDs", "  Yaw Rate", "  Roll Rate", "  Pitch Rate", "  General", "  VTX", "Raceflight One Program Menu" } 
 
 --need to preserve a space before all the screen rows so that theres room for the cursor
 -- these will need to match what the FC expects, each array will be used to draw a buffered screen, with the data being filled in by the FC and logic and Cursor moving done by FC
@@ -31,7 +43,8 @@ local titleScreenArray = { "  Yaw PIDs", "  Roll PIDs", "  Pitch PIDs", "  Yaw R
 local pidScreenArray  = { "  P:","  I:","  D:","  Filter:","  Save and Exit" } --this will be used for multiple pid screens
 local rateScreenArray  = { "  Rate:","  Expo:","  Acro:","  DeadBand:","  Save and Exit" } --this will be used for multiple rate screens
 local generalScreenArray  = { "  RcSmooth:","  I Limit:","  D Limit:","  CG:","  Save and Exit" } --this will be used for the general page
-local vtxScreenArray  = { "  Band:","  Channel:","  Power:","  Exit Pitmode","  Save and Exit" } --this will be used for the VTX page
+local vtxScreenArray  = { "  Band:","  Channel:","  Power:","  Exit Pitmode","  Save and exit" } --this will be used for the VTX page
+local idleScreenArray =  { "Welcome","Place the Sticks in the bottom ","Towards the center","To enter Programming Mode"," " }
 
 local rowOffset = {1,2,3,4,5,6,7,8}
 
@@ -56,6 +69,7 @@ local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
 	
 	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], 0)
+	
 	for i=1,5,1 do
 		lcd.drawText(0*horizontalCharSpacing,i*verticalCharSpacing,screenArray[i], 0)
 	end
@@ -68,11 +82,16 @@ local function HandleMenuChoice(choice)
 		elseif choice == 4 or choice == 5 or choice == 6 then DrawBufferedScreen(rateScreenArray) -- next 3 menus will use the same 
 		elseif choice == 7 then DrawBufferedScreen(generalScreenArray)
 		elseif choice == 8 then DrawBufferedScreen(vtxScreenArray)
+		elseif choice == 9 then DrawBufferedScreen(idleScreenArray)
 	end
 end
 
-local function DrawCursor()
+local function DrawCursor() --this will draw the cursor based on current row
+	if currentRow ~= lastRow then
+		lcd.drawText(0*horizontalCharSpacing,lastRow*verticalCharSpacing," ", 0)	
+	end
 	lcd.drawText(0*horizontalCharSpacing,currentRow*verticalCharSpacing,">", 0)
+	lastRow = currentRow
 end
 
 local function ChangeData(data)
@@ -89,12 +108,35 @@ local function ReceiveSport()
 		rxBuffer[3] = bit32.band(bit32.rshift(value,8 ),0xFF)
 		rxBuffer[4] = bit32.band(bit32.rshift(value,16),0xFF)
 		rxBuffer[5] = bit32.band(bit32.rshift(value,24),0xFF)
+		dataCombined = ( (bit32.lshift(rxBuffer[5],8)) + rxBuffer[4]) --turns the two 1 byte numbers into 1 16 bit number
 		return true
 	else
 		return false
 	end
 end
 
+local function ProccessCommand()
+	if rxBuffer[2] == 1 then
+		--we are changing screens
+		--set first row based off last 2 bytes
+		-- fc will then send 4 more packets which will set the 4 next lines
+		HandleMenuChoice(rxBuffer[3])
+		currentRow = 1
+		--ChangeData( (rxBuffer[5]<<8) + rxBuffer[4] ) --turns the two 1 byte numbers into 1 16 bit number
+		currentRow = 0
+	end
+	if rxBuffer[2] == 2 then
+		--we are changing data
+		-- 2nd byte is the row to set and last two bytes are the data
+		currentRow=rxBuffer[3]
+		--ChangeData( (rxBuffer[5]<<8) + rxBuffer[4] )
+
+	end	
+	if rxBuffer[2] == 3 then
+		--we are exiting
+		--set screen to init
+	end
+end
 local function ProcessSport()
 	local x=0
 	local y=0
@@ -136,9 +178,10 @@ local function DrawScreen()
 	DrawBuffers()
 	if getValue("RSSI") == 0 then
 		--lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
-		HandleMenuChoice(7)
-		DrawCursor()
-		ChangeData("50") 
+		--lcd.drawText(0*horizontalCharSpacing,0*verticalCharSpacing,"Raceflight One Program Menu", INVERS+BLINK)
+		HandleMenuChoice(9)
+		--DrawCursor()
+		--ChangeData("50") 
 		--lcd.drawText(0,0,titleScreenArray[1], INVERS+BLINK)
 		--DrawPidScreen(pidScreenArray)
 	end
