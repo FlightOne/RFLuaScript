@@ -14,6 +14,7 @@
 local horizontalCharSpacing = 6
 local verticalCharSpacing   = 10
 local currentScreen = 1
+local currentRow = 4
 local rxBuffer  = {}
 local xyBuffer  = {}
 local CMD_PRINT = 0x12
@@ -21,17 +22,26 @@ local CMD_ERASE = 0x13
 
 
 --FIX would like to move these arrays to a seperate file at some point
-local titleScreenArray = { "Yaw PIDs", "Roll PIDs", "Pitch PIDs", "Yaw Rate", "Roll Rate", "Pitch Rate", "General", "VTX" }
+--each needs a space for the > to go in
+local titleScreenArray = { "  Yaw PIDs", "  Roll PIDs", "  Pitch PIDs", "  Yaw Rate", "  Roll Rate", "  Pitch Rate", "  General", "  VTX" }
 
 --need to preserve a space before all the screen rows so that theres room for the cursor
 -- these will need to match what the FC expects, each array will be used to draw a buffered screen, with the data being filled in by the FC and logic and Cursor moving done by FC
 -- x9d has max of 5 rows 
-local pidScreenArray  = { " P: "," I: "," D: "," Filter: "," Save and Exit" } --this will be used for multiple pid screens
-local rateScreenArray  = { " Rate: "," Expo: "," Acro: "," DeadBand: "," Save and Exit" } --this will be used for multiple rate screens
-local generalScreenArray  = { " RcSmooth: "," I Limit: "," D Limit: "," CG: "," Save and Exit" } --this will be used for the general page
-local vtxScreenArray  = { " Band: "," Channel: "," Power: "," Exit Pitmode "," Save and Exit" } --this will be used for the VTX page
+local pidScreenArray  = { "  P:","  I:","  D:","  Filter:","  Save and Exit" } --this will be used for multiple pid screens
+local rateScreenArray  = { "  Rate:","  Expo:","  Acro:","  DeadBand:","  Save and Exit" } --this will be used for multiple rate screens
+local generalScreenArray  = { "  RcSmooth:","  I Limit:","  D Limit:","  CG:","  Save and Exit" } --this will be used for the general page
+local vtxScreenArray  = { "  Band:","  Channel:","  Power:","  Exit Pitmode","  Save and Exit" } --this will be used for the VTX page
 
-
+local rowOffset = {1,2,3,4,5,6,7,8}
+rowOffset[1] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5])} 
+rowOffset[2] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5])} 
+rowOffset[3] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5])} 
+rowOffset[4] = {string.len(rateScreenArray[1]), string.len(rateScreenArray[2]), string.len(rateScreenArray[3]), string.len(rateScreenArray[4]), string.len(rateScreenArray[5])} 
+rowOffset[5] = {string.len(rateScreenArray[1]), string.len(rateScreenArray[2]), string.len(rateScreenArray[3]), string.len(rateScreenArray[4]), string.len(rateScreenArray[5])}
+rowOffset[6] = {string.len(rateScreenArray[1]), string.len(rateScreenArray[2]), string.len(rateScreenArray[3]), string.len(rateScreenArray[4]), string.len(rateScreenArray[5])}
+rowOffset[7] = {string.len(generalScreenArray[1]), string.len(generalScreenArray[2]), string.len(generalScreenArray[3]), string.len(generalScreenArray[4]), string.len(generalScreenArray[5])} 
+rowOffset[8] = {string.len(vtxScreenArray[1]), string.len(vtxScreenArray[2]), string.len(vtxScreenArray[3]), string.len(vtxScreenArray[4]), string.len(vtxScreenArray[5])} 
 	
 
 --############################Functions########################################################
@@ -58,6 +68,14 @@ local function HandleMenuChoice(choice)
 		elseif choice == 7 then DrawBufferedScreen(generalScreenArray)
 		elseif choice == 8 then DrawBufferedScreen(vtxScreenArray)
 	end
+end
+
+local function DrawCursor()
+	lcd.drawText(0*horizontalCharSpacing,currentRow*verticalCharSpacing,">", 0)
+end
+
+local function ChangeData(data)
+	lcd.drawText( (rowOffset[currentScreen][currentRow] -1)*horizontalCharSpacing,currentRow*verticalCharSpacing,data, 0)
 end
 
 local function ReceiveSport()
@@ -117,7 +135,9 @@ local function DrawScreen()
 	DrawBuffers()
 	if getValue("RSSI") == 0 then
 		--lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
-		HandleMenuChoice(2)
+		HandleMenuChoice(7)
+		DrawCursor()
+		ChangeData("50") 
 		--lcd.drawText(0,0,titleScreenArray[1], INVERS+BLINK)
 		--DrawPidScreen(pidScreenArray)
 	end
