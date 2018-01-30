@@ -13,6 +13,7 @@
 --###############################Variables#######################################################
 local horizontalCharSpacing = 6
 local verticalCharSpacing   = 10
+local currentScreen = 1
 local rxBuffer  = {}
 local xyBuffer  = {}
 local CMD_PRINT = 0x12
@@ -24,10 +25,11 @@ local titleScreenArray = { "Yaw PIDs", "Roll PIDs", "Pitch PIDs", "Yaw Rate", "R
 
 --need to preserve a space before all the screen rows so that theres room for the cursor
 -- these will need to match what the FC expects, each array will be used to draw a buffered screen, with the data being filled in by the FC and logic and Cursor moving done by FC
-local pidScreenArray  = { " P: "," I: "," D: "," Filter: "," GA: "," Save"," Exit" } --this will be used for multiple pid screens
-local rateScreenArray  = { " Rate: "," Expo: "," Acro: ","  "," DeadBand: "," Save"," Exit" } --this will be used for multiple rate screens
-local generalScreenArray = = { " RcSmooth: "," I Limit: "," D Limit: "," CG: ","  "," Save"," Exit" } --this will be used for the general page
-local generalScreenArray = = { " Band: "," Channel: "," Power: "," Exit Pitmode ","  "," Save"," Exit" } --this will be used for the VTX page
+-- x9d has max of 5 rows 
+local pidScreenArray  = { " P: "," I: "," D: "," Filter: "," Save and Exit" } --this will be used for multiple pid screens
+local rateScreenArray  = { " Rate: "," Expo: "," Acro: "," DeadBand: "," Save and Exit" } --this will be used for multiple rate screens
+local generalScreenArray  = { " RcSmooth: "," I Limit: "," D Limit: "," CG: "," Save and Exit" } --this will be used for the general page
+local generalScreenArray  = { " Band: "," Channel: "," Power: "," Exit Pitmode "," Save and Exit" } --this will be used for the VTX page
 
 
 	
@@ -35,6 +37,17 @@ local generalScreenArray = = { " Band: "," Channel: "," Power: "," Exit Pitmode 
 --############################Functions########################################################
 local function isempty(s)
   return s == nil or s == ''
+end
+
+
+local function DrawPidScreen()
+	--drawing the pre defined screen
+	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], INVERS)
+	lcd.drawText(0*horizontalCharSpacing,1*verticalCharSpacing,pidScreenArray[1], INVERS)
+	lcd.drawText(0*horizontalCharSpacing,2*verticalCharSpacing,pidScreenArray[2], INVERS)
+	lcd.drawText(0*horizontalCharSpacing,3*verticalCharSpacing,pidScreenArray[3], INVERS)
+	lcd.drawText(0*horizontalCharSpacing,4*verticalCharSpacing,pidScreenArray[4], INVERS)
+	lcd.drawText(0*horizontalCharSpacing,5*verticalCharSpacing,pidScreenArray[5], INVERS)
 end
 
 local function ReceiveSport()
@@ -94,7 +107,8 @@ local function DrawScreen()
 	DrawBuffers()
 	if getValue("RSSI") == 0 then
 		--lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
-		lcd.drawText(0,0,titleScreenArray[1], INVERS+BLINK)
+		--lcd.drawText(0,0,titleScreenArray[1], INVERS+BLINK)
+		DrawPidScreen()
 	end
 end
 
