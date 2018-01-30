@@ -34,6 +34,8 @@ local generalScreenArray  = { "  RcSmooth:","  I Limit:","  D Limit:","  CG:"," 
 local vtxScreenArray  = { "  Band:","  Channel:","  Power:","  Exit Pitmode","  Save and Exit" } --this will be used for the VTX page
 
 local rowOffset = {1,2,3,4,5,6,7,8}
+
+--these set the offset based on the length of the string, needs to be subracted by 1 when applied since the screen starts at 0
 rowOffset[1] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5])} 
 rowOffset[2] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5])} 
 rowOffset[3] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5])} 
@@ -52,12 +54,11 @@ end
 
 local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
+	
 	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], 0)
-	lcd.drawText(0*horizontalCharSpacing,1*verticalCharSpacing,screenArray[1], 0)
-	lcd.drawText(0*horizontalCharSpacing,2*verticalCharSpacing,screenArray[2], 0)
-	lcd.drawText(0*horizontalCharSpacing,3*verticalCharSpacing,screenArray[3], 0)
-	lcd.drawText(0*horizontalCharSpacing,4*verticalCharSpacing,screenArray[4], 0)
-	lcd.drawText(0*horizontalCharSpacing,5*verticalCharSpacing,screenArray[5], 0)
+	for i=1,5,1 do
+		lcd.drawText(0*horizontalCharSpacing,i*verticalCharSpacing,screenArray[i], 0)
+	end
 end
 
 local function HandleMenuChoice(choice)
