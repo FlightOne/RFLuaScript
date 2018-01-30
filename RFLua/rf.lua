@@ -29,7 +29,7 @@ local titleScreenArray = { "Yaw PIDs", "Roll PIDs", "Pitch PIDs", "Yaw Rate", "R
 local pidScreenArray  = { " P: "," I: "," D: "," Filter: "," Save and Exit" } --this will be used for multiple pid screens
 local rateScreenArray  = { " Rate: "," Expo: "," Acro: "," DeadBand: "," Save and Exit" } --this will be used for multiple rate screens
 local generalScreenArray  = { " RcSmooth: "," I Limit: "," D Limit: "," CG: "," Save and Exit" } --this will be used for the general page
-local generalScreenArray  = { " Band: "," Channel: "," Power: "," Exit Pitmode "," Save and Exit" } --this will be used for the VTX page
+local vtxScreenArray  = { " Band: "," Channel: "," Power: "," Exit Pitmode "," Save and Exit" } --this will be used for the VTX page
 
 
 	
@@ -40,14 +40,24 @@ local function isempty(s)
 end
 
 
-local function DrawPidScreen()
+local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
-	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], INVERS)
-	lcd.drawText(0*horizontalCharSpacing,1*verticalCharSpacing,pidScreenArray[1], INVERS)
-	lcd.drawText(0*horizontalCharSpacing,2*verticalCharSpacing,pidScreenArray[2], INVERS)
-	lcd.drawText(0*horizontalCharSpacing,3*verticalCharSpacing,pidScreenArray[3], INVERS)
-	lcd.drawText(0*horizontalCharSpacing,4*verticalCharSpacing,pidScreenArray[4], INVERS)
-	lcd.drawText(0*horizontalCharSpacing,5*verticalCharSpacing,pidScreenArray[5], INVERS)
+	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], 0)
+	lcd.drawText(0*horizontalCharSpacing,1*verticalCharSpacing,screenArray[1], 0)
+	lcd.drawText(0*horizontalCharSpacing,2*verticalCharSpacing,screenArray[2], 0)
+	lcd.drawText(0*horizontalCharSpacing,3*verticalCharSpacing,screenArray[3], 0)
+	lcd.drawText(0*horizontalCharSpacing,4*verticalCharSpacing,screenArray[4], 0)
+	lcd.drawText(0*horizontalCharSpacing,5*verticalCharSpacing,screenArray[5], 0)
+end
+
+local function HandleMenuChoice(choice)
+	currentScreen = choice
+	
+	if choice == 1 or choice == 2 or choice == 3 then DrawBufferedScreen(pidScreenArray) -- first 3 menus will use the same 
+		elseif choice == 4 or choice == 5 or choice == 6 then DrawBufferedScreen(rateScreenArray) -- next 3 menus will use the same 
+		elseif choice == 7 then DrawBufferedScreen(generalScreenArray)
+		elseif choice == 8 then DrawBufferedScreen(vtxScreenArray)
+	end
 end
 
 local function ReceiveSport()
@@ -107,8 +117,9 @@ local function DrawScreen()
 	DrawBuffers()
 	if getValue("RSSI") == 0 then
 		--lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
+		HandleMenuChoice(2)
 		--lcd.drawText(0,0,titleScreenArray[1], INVERS+BLINK)
-		DrawPidScreen()
+		--DrawPidScreen(pidScreenArray)
 	end
 end
 
