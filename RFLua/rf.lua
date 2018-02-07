@@ -67,7 +67,6 @@ end
 
 local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
-	end
 	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], 0)
 	
 	for i=1,5,1 do
