@@ -67,10 +67,10 @@ end
 
 local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
-	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], 0)
+	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], SMLSIZE)
 	
 	for i=1,5,1 do
-		lcd.drawText(0*horizontalCharSpacing,i*verticalCharSpacing,screenArray[i], 0)
+		lcd.drawText(0*horizontalCharSpacing,i*verticalCharSpacing,screenArray[i], SMLSIZE)
 	end
 end
 
@@ -87,14 +87,14 @@ end
 
 local function DrawCursor() --this will draw the cursor based on current row
 	if currentRow ~= lastRow then
-		lcd.drawText(0*horizontalCharSpacing,lastRow*verticalCharSpacing," ", 0)	
+		lcd.drawText(0*horizontalCharSpacing,lastRow*verticalCharSpacing," ", SMLSIZE)	
 	end
-	lcd.drawText(0*horizontalCharSpacing,currentRow*verticalCharSpacing,">", 0)
+	lcd.drawText(0*horizontalCharSpacing,currentRow*verticalCharSpacing,">", SMLSIZE)
 	lastRow = currentRow
 end
 
 local function ChangeData(data)
-	lcd.drawText( ((rowOffset[currentScreen][currentRow]) -1)*horizontalCharSpacing,currentRow*verticalCharSpacing,data, 0)
+	lcd.drawText( ((rowOffset[currentScreen][currentRow]) -1)*horizontalCharSpacing,currentRow*verticalCharSpacing,data, SMLSIZE)
 end
 
 local function ReceiveSport()
@@ -189,7 +189,7 @@ local function DrawBuffers()
 				if y==0 then
 					textFeature = INVERS
 				else
-					textFeature = 0
+					textFeature = SMLSIZE
 				end
 				lcd.drawText(x*horizontalCharSpacing+1, y*verticalCharSpacing+1, xyBuffer[x][y], textFeature)
 			end
@@ -218,7 +218,9 @@ local function RunUi(event)
 	if getValue("RSSI") == 0 then
 		lcd.clear()
 		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
-		lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
+		--lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
+		HandleMenuChoice(2)
+		DrawCursor()
 	end
 	return 0
 end
@@ -227,7 +229,7 @@ local function InitUi(event)
 	local ver, radio, maj, minor, rev = getVersion()
 	if radio=="x9d" or radio=="x9d+" or radio=="taranisx9e" or radio=="taranisplus" or radio=="taranis" or radio=="x9d-simu" or radio=="x9d+-simu" or radio=="taranisx9e-simu" or radio=="taranisplus-simu" or radio=="taranis-simu" then
 		horizontalCharSpacing = 6
-		verticalCharSpacing   = 10
+		verticalCharSpacing   = 8
 	end
 	--xyBuffer[0] = {}
 	--xyBuffer[0][0] = "RaceFlight One Program Menu"
