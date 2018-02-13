@@ -10,6 +10,12 @@
 
 --Version 2.0
 
+--#############################Commmand defines#####################################
+local CMD_CHANGE_SCREEN = 1
+local CMD_CHANGE_DATA  =  2
+local CMD_EXIT  = 3 
+local CMD_CLEAR_SCREEN  = 4 
+
 --###############################Variables#######################################################
 local horizontalCharSpacing = 6
 local verticalCharSpacing   = 10
@@ -22,11 +28,8 @@ local dataCombined = 1
 local CMD_PRINT = 0x12
 local CMD_ERASE = 0x13
 
-
-local CMD_CHANGE_SCREEN = 1
-local CMD_CHANGE_DATA  =  2
-local CMD_EXIT  = 3 
-
+local testRXData = {0,0,CMD_CLEAR_SCREEN,4,2,0}
+local dataCombined = ( (bit32.lshift(testRXData[6],8)) + testRXData[5]) --turns the two 1 byte numbers into 1 16 bit number
 
 --FIX would like to move these arrays to a seperate file at some point
 --first byte command rest of bytes differ depending on command 
@@ -39,24 +42,24 @@ local titleScreenArray = { "  Yaw PIDs", "  Roll PIDs", "  Pitch PIDs", "  Yaw R
 
 --need to preserve a space before all the screen rows so that theres room for the cursor
 -- these will need to match what the FC expects, each array will be used to draw a buffered screen, with the data being filled in by the FC and logic and Cursor moving done by FC
--- x9d has max of 5 rows 
-local pidScreenArray  = { "  P:","  I:","  D:","  Filter:","  Save and Exit" } --this will be used for multiple pid screens
-local rateScreenArray  = { "  Rate:","  Expo:","  Acro:","  DeadBand:","  Save and Exit" } --this will be used for multiple rate screens
-local generalScreenArray  = { "  RcSmooth:","  I Limit:","  D Limit:","  CG:","  Save and Exit" } --this will be used for the general page
-local vtxScreenArray  = { "  Band:","  Channel:","  Power:","  Exit Pitmode","  Save and exit" } --this will be used for the VTX page
-local idleScreenArray =  { "Welcome","Place the Sticks in the bottom ","Towards the center","To enter Programming Mode"," " }
+-- x9d has max of 6 rows 
+local pidScreenArray  = { "  P:", "  I:", "  D:", "  Filter:", "  GA", "  Save and Exit" } --this will be used for multiple pid screens
+local rateScreenArray  = { "  Rate:", "  Expo:", "  Acro:", "  DeadBand:", "  ", "  Save and Exit" } --this will be used for multiple rate screens
+local generalScreenArray  = { "  RcSmooth:", "  I Limit:", "  D Limit:", "  CG:", "  ", "  Save and Exit" } --this will be used for the general page
+local vtxScreenArray  = { "  Band:", "  Channel:", "  Power:", "  Exit Pitmode", "  ", "  Save and exit" } --this will be used for the VTX page
+local idleScreenArray =  { "Welcome", "Place the Sticks in the bottom ", "Towards the center", "To enter Programming Mode", " " , " " }
 
 local rowOffset = {1,2,3,4,5,6,7,8}
 
 --these set the offset based on the length of the string, needs to be subracted by 1 when applied since the screen starts at 0
-rowOffset[1] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5])} 
-rowOffset[2] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5])} 
-rowOffset[3] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5])} 
-rowOffset[4] = {string.len(rateScreenArray[1]), string.len(rateScreenArray[2]), string.len(rateScreenArray[3]), string.len(rateScreenArray[4]), string.len(rateScreenArray[5])} 
-rowOffset[5] = {string.len(rateScreenArray[1]), string.len(rateScreenArray[2]), string.len(rateScreenArray[3]), string.len(rateScreenArray[4]), string.len(rateScreenArray[5])}
-rowOffset[6] = {string.len(rateScreenArray[1]), string.len(rateScreenArray[2]), string.len(rateScreenArray[3]), string.len(rateScreenArray[4]), string.len(rateScreenArray[5])}
-rowOffset[7] = {string.len(generalScreenArray[1]), string.len(generalScreenArray[2]), string.len(generalScreenArray[3]), string.len(generalScreenArray[4]), string.len(generalScreenArray[5])} 
-rowOffset[8] = {string.len(vtxScreenArray[1]), string.len(vtxScreenArray[2]), string.len(vtxScreenArray[3]), string.len(vtxScreenArray[4]), string.len(vtxScreenArray[5])} 
+rowOffset[1] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5]), string.len(pidScreenArray[6])} 
+rowOffset[2] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5]), string.len(pidScreenArray[6]) } 
+rowOffset[3] = {string.len(pidScreenArray[1]), string.len(pidScreenArray[2]), string.len(pidScreenArray[3]), string.len(pidScreenArray[4]), string.len(pidScreenArray[5]) , string.len(pidScreenArray[6])} 
+rowOffset[4] = {string.len(rateScreenArray[1]), string.len(rateScreenArray[2]), string.len(rateScreenArray[3]), string.len(rateScreenArray[4]), string.len(rateScreenArray[5]) , string.len(rateScreenArray[6])} 
+rowOffset[5] = {string.len(rateScreenArray[1]), string.len(rateScreenArray[2]), string.len(rateScreenArray[3]), string.len(rateScreenArray[4]), string.len(rateScreenArray[5]), string.len(rateScreenArray[6])}
+rowOffset[6] = {string.len(rateScreenArray[1]), string.len(rateScreenArray[2]), string.len(rateScreenArray[3]), string.len(rateScreenArray[4]), string.len(rateScreenArray[5]), string.len(rateScreenArray[6])}
+rowOffset[7] = {string.len(generalScreenArray[1]), string.len(generalScreenArray[2]), string.len(generalScreenArray[3]), string.len(generalScreenArray[4]), string.len(generalScreenArray[5]), string.len(generalScreenArray[6])} 
+rowOffset[8] = {string.len(vtxScreenArray[1]), string.len(vtxScreenArray[2]), string.len(vtxScreenArray[3]), string.len(vtxScreenArray[4]), string.len(vtxScreenArray[5]), string.len(vtxScreenArray[6])} 
 	
 
 --############################Functions########################################################
@@ -69,7 +72,7 @@ local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
 	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], SMLSIZE)
 	
-	for i=1,5,1 do
+	for i=1,6,1 do
 		lcd.drawText(0*horizontalCharSpacing,i*verticalCharSpacing,screenArray[i], SMLSIZE)
 	end
 end
@@ -121,10 +124,10 @@ end
 
 local function ProccessCommand()
 	if currentRow < 0 then 
-		currentRow = 5
+		currentRow = 6
 	end
 
-	if currentRow > 5 then 
+	if currentRow > 6 then 
 		currentRow = 1
 	end
 
@@ -135,31 +138,33 @@ local function ProccessCommand()
 	if currentScreen < 1 then 
 		currentScreen = 8
 	end
-	if rxBuffer[3] == 1 then
+
+	if testRXData[3] == CMD_CHANGE_SCREEN then
 		--we are changing screens
 		--set first row based off last 2 bytes
 		-- fc will then send 4 more packets which will set the 4 next lines
 		lcd.clear()
 		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
-		HandleMenuChoice(rxBuffer[4])
-		currentScreen = rxBuffer[4]
+		HandleMenuChoice(testRXData[4])
+		currentScreen = testRXData[4]
 		currentRow = 1
 		ChangeData(dataCombined) --turns the two 1 byte numbers into 1 16 bit number
 		currentRow = 0
-	end
-	if rxBuffer[3] == 2 then
+	elseif testRXData[3] == CMD_CHANGE_DATA then
 		--we are changing data
 		-- 2nd byte is the row to set and last two bytes are the data
-		currentRow=rxBuffer[4]
+		currentRow=testRXData[4]
 		ChangeData( dataCombined)
-
-	end	
-	if rxBuffer[3] == 3  then --or rxBuffer[3] == 0
+	elseif testRXData[3] == CMD_EXIT  then 
 		--we are exiting
 		--set screen to init
 		lcd.clear()
 		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
 		HandleMenuChoice(9) --9 is ldle
+	elseif testRXData[3] == CMD_CLEAR_SCREEN  then 
+		--we are cleairng the screen
+		lcd.clear()
+		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
 	end
 end
 local function ProcessSport()
@@ -219,8 +224,11 @@ local function RunUi(event)
 		lcd.clear()
 		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
 		--lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
-		HandleMenuChoice(2)
+		ProccessCommand()
 		DrawCursor()
+		testRXData = {0,0,CMD_CHANGE_SCREEN,7,2,0}
+		--HandleMenuChoice(2)
+		--DrawCursor()
 	end
 	return 0
 end
