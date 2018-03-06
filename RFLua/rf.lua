@@ -10,23 +10,37 @@
 
 --Version 2.0
 
+
+--##############################REF#################################################
+--sportTelemetryPush(0x0D,0x30,20,20) -- should justy make the data id a checksum
+
+local BUILD_NUMBER = 3
 --#############################Commmand defines#####################################
 local CMD_CHANGE_SCREEN = 1
 local CMD_CHANGE_DATA  =  2
 local CMD_EXIT  = 3 
-local CMD_CLEAR_SCREEN  = 4 
+local CMD_CLEAR_SCREEN  = 4
+local CMD_REQUEST_DATA  = 5
+local CMD_ADD_DATA  = 6
+local CMD_SUBTRACT_DATA  = 7 
+local REPLYID = 0x30 --48 in dec
+local REQUESTID = 0x32 
+local SENSORID = 0x0D --13 in dec
 
 --###############################Variables#######################################################
 local horizontalCharSpacing = 6
 local verticalCharSpacing   = 10
 local currentScreen = 1
 local currentRow = 1
+local luaStatus = "idle"
 local lastRow = 1
 local rxBuffer  = {}
 local xyBuffer  = {}
 local dataCombined = 1
 local CMD_PRINT = 0x12
 local CMD_ERASE = 0x13
+local replyCheckSumLua = 0
+local tempNumVar = 0
 
 local testRXData = {0,0,CMD_CLEAR_SCREEN,4,2,0}
 local dataCombined = ( (bit32.lshift(testRXData[6],8)) + testRXData[5]) --turns the two 1 byte numbers into 1 16 bit number
@@ -40,6 +54,8 @@ local dataCombined = ( (bit32.lshift(testRXData[6],8)) + testRXData[5]) --turns 
 --each needs a space for the > to go in
 local titleScreenArray = { "  Yaw PIDs", "  Roll PIDs", "  Pitch PIDs", "  Yaw Rate", "  Roll Rate", "  Pitch Rate", "  General", "  VTX", "Raceflight One Program Menu" } 
 
+
+local pidDataArray = { 20,20,20,20,20}
 --need to preserve a space before all the screen rows so that theres room for the cursor
 -- these will need to match what the FC expects, each array will be used to draw a buffered screen, with the data being filled in by the FC and logic and Cursor moving done by FC
 -- x9d has max of 6 rows 
@@ -67,6 +83,57 @@ local function isempty(s)
   return s == nil or s == ''
 end
 
+local function ChangeData(data)
+	lcd.drawText( ((rowOffset[currentScreen][currentRow]) -1)*horizontalCharSpacing,currentRow*verticalCharSpacing,data, SMLSIZE)
+end
+
+local function FillPIDData()
+	lcd.drawText( ((rowOffset[currentScreen][1]) -1)*horizontalCharSpacing,1*verticalCharSpacing,pidDataArray[1], SMLSIZE)
+	lcd.drawText( ((rowOffset[currentScreen][2]) -1)*horizontalCharSpacing,2*verticalCharSpacing,pidDataArray[2], SMLSIZE)
+	lcd.drawText( ((rowOffset[currentScreen][3]) -1)*horizontalCharSpacing,3*verticalCharSpacing,pidDataArray[3], SMLSIZE)
+	lcd.drawText( ((rowOffset[currentScreen][4]) -1)*horizontalCharSpacing,4*verticalCharSpacing,pidDataArray[4], SMLSIZE)
+	lcd.drawText( ((rowOffset[currentScreen][5]) -1)*horizontalCharSpacing,5*verticalCharSpacing,pidDataArray[5], SMLSIZE)
+end
+
+
+local function HandleKeyEvents(passedevent)
+	--Right now this is just looking for a key release to act
+
+	if luaStatus == "editing" then --we are editing so we need to increase and decrease the data
+		if passedevent == EVT_MINUS_FIRST then
+			pidDataArray[currentRow] = pidDataArray[currentRow] - 1 
+		end
+		if passedevent == EVT_PLUS_FIRST then
+			pidDataArray[currentRow] = pidDataArray[currentRow] + 1
+		end
+	end
+
+	if luaStatus == "idle" then --idle means we need to navigate the menus
+		if passedevent == EVT_MINUS_FIRST then
+			currentRow = currentRow + 1	
+		end
+		if passedevent == EVT_PLUS_FIRST then
+			currentRow = currentRow - 1	
+		end
+
+		if passedevent == EVT_ENTER_BREAK then
+			if currentRow == 6 then
+				luaStatus = "saving"
+			else
+				luaStatus = "editing"
+			end
+		end
+
+		if passedevent == EVT_PAGE_BREAK then
+			currentScreen = currentScreen + 1
+		end
+	end
+	
+	if passedevent == EVT_EXIT_BREAK then --this runs outside of the ifs so we can always exit from editing mode 
+		luaStatus = "idle"	
+	end
+
+end
 
 local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
@@ -92,12 +159,15 @@ local function DrawCursor() --this will draw the cursor based on current row
 	if currentRow ~= lastRow then
 		lcd.drawText(0*horizontalCharSpacing,lastRow*verticalCharSpacing," ", SMLSIZE)	
 	end
-	lcd.drawText(0*horizontalCharSpacing,currentRow*verticalCharSpacing,">", SMLSIZE)
-	lastRow = currentRow
-end
+	if luaStatus == "idle" then
+		lcd.drawText(0*horizontalCharSpacing,currentRow*verticalCharSpacing,">", SMLSIZE)
+	end
 
-local function ChangeData(data)
-	lcd.drawText( ((rowOffset[currentScreen][currentRow]) -1)*horizontalCharSpacing,currentRow*verticalCharSpacing,data, SMLSIZE)
+	if luaStatus == "editing" then
+		lcd.drawText(0*horizontalCharSpacing,currentRow*verticalCharSpacing,"*", SMLSIZE)
+	end
+
+	lastRow = currentRow
 end
 
 local function ReceiveSport()
@@ -107,7 +177,7 @@ local function ReceiveSport()
 	--local daId = 0x32
 	--local value = 1
 	--if sId == 0x0D and fId == 0x32 then
-	if fId == 0x32 then
+	if fId == REQUESTID then
 		rxBuffer = {}
 		rxBuffer[1] = bit32.band(daId,0xFF)
 		rxBuffer[2] = bit32.band(bit32.rshift(daId,8),0xFF)
@@ -123,7 +193,7 @@ local function ReceiveSport()
 end
 
 local function ProccessCommand()
-	if currentRow < 0 then 
+	if currentRow < 1 then 
 		currentRow = 6
 	end
 
@@ -150,6 +220,9 @@ local function ProccessCommand()
 		currentRow = 1
 		ChangeData(dataCombined) --turns the two 1 byte numbers into 1 16 bit number
 		currentRow = 0
+		--replyCheckSumLua = (rxBuffer[1] + rxBuffer[2]+ rxBuffer[2]+ rxBuffer[3]+ rxBuffer[4]+ rxBuffer[5]+ rxBuffer[6])/6
+		--sportTelemetryPush(SENSORID,REPLYID,replyCheckSumLua,CMD_CHANGE_SCREEN) -- should justy make the data id a checksum respond so the FC knows we got the data and proccessed it
+
 	elseif testRXData[3] == CMD_CHANGE_DATA then
 		--we are changing data
 		-- 2nd byte is the row to set and last two bytes are the data
@@ -165,24 +238,8 @@ local function ProccessCommand()
 		--we are cleairng the screen
 		lcd.clear()
 		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
-	end
-end
-local function ProcessSport()
-	local x=0
-	local y=0
-	local z=0
-	if (rxBuffer[1] == CMD_PRINT) then
-		z = rxBuffer[2]
-		y = math.floor(z / 24)
-		x = (z - (y * 24))
-		for i=0,3,1 do
-			if isempty(xyBuffer[x+i]) then
-				xyBuffer[x+i] = {}
-			end
-			xyBuffer[x+i][y] = string.char(rxBuffer[2+i])
-		end
-	elseif (rxBuffer[1] == CMD_ERASE) then
-		xyBuffer = {}
+		--replyCheckSumLua = (rxBuffer[1] + rxBuffer[2]+ rxBuffer[2]+ rxBuffer[3]+ rxBuffer[4]+ rxBuffer[5]+ rxBuffer[6])/6
+		--sportTelemetryPush(SENSORID,REPLYID,replyCheckSumLua,CMD_CLEAR_SCREEN) -- should justy make the data id a checksum respond so the FC knows we got the data and proccessed it
 	end
 end
 
@@ -202,38 +259,25 @@ local function DrawBuffers()
 	end
 end
 
-local function DrawScreen()
-	lcd.clear()
-	lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
-	DrawBuffers()
-	if getValue("RSSI") == 0 then
-		lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
-		--ProccessCommand()
-	end
-end
-
 local function RunUi(event)
 
+	ProccessCommand()
+	HandleKeyEvents(event)
+	HandleMenuChoice(currentScreen)
+	DrawCursor()
+	FillPIDData()
 
-	if ReceiveSport() then
-		ProccessCommand()
-		HandleMenuChoice(currentScreen)
-		DrawCursor()
-	end
-	if getValue("RSSI") == 0 then
-		lcd.clear()
-		lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
-		--lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
-		ProccessCommand()
-		DrawCursor()
-		testRXData = {0,0,CMD_CHANGE_SCREEN,7,2,0}
-		--HandleMenuChoice(2)
-		--DrawCursor()
-	end
+	--if getValue("RSSI") == 0 then
+	--	lcd.clear()
+	--	lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
+	--	lcd.drawText(5*horizontalCharSpacing,5*verticalCharSpacing,"No RX Detected", INVERS+BLINK)
+	--end
+
+	--lcd.drawText(8*horizontalCharSpacing,0,BUILD_NUMBER, SMLSIZE) -- use this for debugging so you can see the build number
 	return 0
 end
 
-local function InitUi(event)
+local function InitUi()
 	local ver, radio, maj, minor, rev = getVersion()
 	if radio=="x9d" or radio=="x9d+" or radio=="taranisx9e" or radio=="taranisplus" or radio=="taranis" or radio=="x9d-simu" or radio=="x9d+-simu" or radio=="taranisx9e-simu" or radio=="taranisplus-simu" or radio=="taranis-simu" then
 		horizontalCharSpacing = 6
