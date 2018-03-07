@@ -33,6 +33,8 @@ local verticalCharSpacing   = 10
 local currentScreen = 1
 local currentRow = 1
 local luaStatus = "idle"
+local textSize = SMLSIZE
+local rowNumberOffset = 0
 local lastRow = 1
 local rxBuffer  = {}
 local xyBuffer  = {}
@@ -59,10 +61,10 @@ local pidDataArray = { 20,20,20,20,20}
 --need to preserve a space before all the screen rows so that theres room for the cursor
 -- these will need to match what the FC expects, each array will be used to draw a buffered screen, with the data being filled in by the FC and logic and Cursor moving done by FC
 -- x9d has max of 6 rows 
-local pidScreenArray  = { "  P:", "  I:", "  D:", "  Filter:", "  GA", "  Save and Exit" } --this will be used for multiple pid screens
-local rateScreenArray  = { "  Rate:", "  Expo:", "  Acro:", "  DeadBand:", "  ", "  Save and Exit" } --this will be used for multiple rate screens
-local generalScreenArray  = { "  RcSmooth:", "  I Limit:", "  D Limit:", "  CG:", "  ", "  Save and Exit" } --this will be used for the general page
-local vtxScreenArray  = { "  Band:", "  Channel:", "  Power:", "  Exit Pitmode", "  ", "  Save and exit" } --this will be used for the VTX page
+local pidScreenArray  = { "   P:", "   I:", "   D:", "   Filter:", "   GA", "   Save and Exit" } --this will be used for multiple pid screens
+local rateScreenArray  = { "    Rate:", "   Expo:", "   Acro:", "   DeadBand:", "  ", "   Save and Exit" } --this will be used for multiple rate screens
+local generalScreenArray  = { "   RcSmooth:", "   I Limit:", "   D Limit:", "   CG:", "  ", "   Save and Exit" } --this will be used for the general page
+local vtxScreenArray  = { "   Band:", "   Channel:", "   Power:", "   Exit Pitmode", "  ", "   Save and exit" } --this will be used for the VTX page
 local idleScreenArray =  { "Welcome", "Place the Sticks in the bottom ", "Towards the center", "To enter Programming Mode", " " , " " }
 
 local rowOffset = {1,2,3,4,5,6,7,8}
@@ -84,15 +86,15 @@ local function isempty(s)
 end
 
 local function ChangeData(data)
-	lcd.drawText( ((rowOffset[currentScreen][currentRow]) -1)*horizontalCharSpacing,currentRow*verticalCharSpacing,data, SMLSIZE)
+	lcd.drawText( ((rowOffset[currentScreen][currentRow]) -1)*horizontalCharSpacing,(currentRow + rowNumberOffset)*verticalCharSpacing,data, textSize)
 end
 
 local function FillPIDData()
-	lcd.drawText( ((rowOffset[currentScreen][1]) -1)*horizontalCharSpacing,1*verticalCharSpacing,pidDataArray[1], SMLSIZE)
-	lcd.drawText( ((rowOffset[currentScreen][2]) -1)*horizontalCharSpacing,2*verticalCharSpacing,pidDataArray[2], SMLSIZE)
-	lcd.drawText( ((rowOffset[currentScreen][3]) -1)*horizontalCharSpacing,3*verticalCharSpacing,pidDataArray[3], SMLSIZE)
-	lcd.drawText( ((rowOffset[currentScreen][4]) -1)*horizontalCharSpacing,4*verticalCharSpacing,pidDataArray[4], SMLSIZE)
-	lcd.drawText( ((rowOffset[currentScreen][5]) -1)*horizontalCharSpacing,5*verticalCharSpacing,pidDataArray[5], SMLSIZE)
+	lcd.drawText( ((rowOffset[currentScreen][1]) -1)*horizontalCharSpacing,(1 +rowNumberOffset)*verticalCharSpacing,pidDataArray[1], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][2]) -1)*horizontalCharSpacing,(2 + rowNumberOffset)*verticalCharSpacing,pidDataArray[2], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][3]) -1)*horizontalCharSpacing,(3 + rowNumberOffset)*verticalCharSpacing,pidDataArray[3], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][4]) -1)*horizontalCharSpacing,(4 + rowNumberOffset)*verticalCharSpacing,pidDataArray[4], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][5]) -1)*horizontalCharSpacing,(5 + rowNumberOffset)*verticalCharSpacing,pidDataArray[5], textSize)
 end
 
 
@@ -100,23 +102,23 @@ local function HandleKeyEvents(passedevent)
 	--Right now this is just looking for a key release to act
 
 	if luaStatus == "editing" then --we are editing so we need to increase and decrease the data
-		if passedevent == EVT_MINUS_FIRST then
-			pidDataArray[currentRow] = pidDataArray[currentRow] - 1 
+		if passedevent == EVT_MINUS_FIRST or passedevent == EVT_ROT_LEFT then
+			sportTelemetryPush(SENSORID,REQUESTID,currentRow,CMD_SUBTRACT_DATA)		
 		end
-		if passedevent == EVT_PLUS_FIRST then
-			pidDataArray[currentRow] = pidDataArray[currentRow] + 1
+		if passedevent == EVT_PLUS_FIRST or passedevent == EVT_ROT_RIGHT then
+			sportTelemetryPush(SENSORID,REQUESTID,currentRow,CMD_ADD_DATA)		
 		end
 	end
 
 	if luaStatus == "idle" then --idle means we need to navigate the menus
-		if passedevent == EVT_MINUS_FIRST then
+		if passedevent == EVT_MINUS_FIRST or passedevent == EVT_ROT_LEFT then
 			currentRow = currentRow + 1	
 		end
-		if passedevent == EVT_PLUS_FIRST then
+		if passedevent == EVT_PLUS_FIRST or passedevent == EVT_ROT_RIGHT then
 			currentRow = currentRow - 1	
 		end
 
-		if passedevent == EVT_ENTER_BREAK then
+		if passedevent == EVT_ENTER_BREAK or passedevent == EVT_ROT_BREAK then
 			if currentRow == 6 then
 				luaStatus = "saving"
 			else
@@ -137,10 +139,10 @@ end
 
 local function DrawBufferedScreen(screenArray)
 	--drawing the pre defined screen
-	lcd.drawText(0*horizontalCharSpacing,0,titleScreenArray[currentScreen], SMLSIZE)
+	lcd.drawText(0*horizontalCharSpacing,(0 + rowNumberOffset),titleScreenArray[currentScreen], INVERS)
 	
 	for i=1,6,1 do
-		lcd.drawText(0*horizontalCharSpacing,i*verticalCharSpacing,screenArray[i], SMLSIZE)
+		lcd.drawText(0*horizontalCharSpacing,(i + rowNumberOffset)*verticalCharSpacing,screenArray[i], textSize)
 	end
 end
 
@@ -157,14 +159,14 @@ end
 
 local function DrawCursor() --this will draw the cursor based on current row
 	if currentRow ~= lastRow then
-		lcd.drawText(0*horizontalCharSpacing,lastRow*verticalCharSpacing," ", SMLSIZE)	
+		lcd.drawText(0*horizontalCharSpacing,(lastRow + rowNumberOffset)*verticalCharSpacing," ", textSize)	
 	end
 	if luaStatus == "idle" then
-		lcd.drawText(0*horizontalCharSpacing,currentRow*verticalCharSpacing,">", SMLSIZE)
+		lcd.drawText(0*horizontalCharSpacing,(currentRow + rowNumberOffset)*verticalCharSpacing,">", textSize)
 	end
 
 	if luaStatus == "editing" then
-		lcd.drawText(0*horizontalCharSpacing,currentRow*verticalCharSpacing,"*", SMLSIZE)
+		lcd.drawText(0*horizontalCharSpacing,(currentRow + rowNumberOffset)*verticalCharSpacing,"*", textSize)
 	end
 
 	lastRow = currentRow
@@ -249,9 +251,9 @@ local function DrawBuffers()
 		for y in pairs(xyBuffer[x]) do
 			if not isempty(xyBuffer[x][y]) then
 				if y==0 then
-					textFeature = INVERS
+					textFeature = textSize --INVERS
 				else
-					textFeature = SMLSIZE
+					textFeature = textSize
 				end
 				lcd.drawText(x*horizontalCharSpacing+1, y*verticalCharSpacing+1, xyBuffer[x][y], textFeature)
 			end
@@ -282,6 +284,13 @@ local function InitUi()
 	if radio=="x9d" or radio=="x9d+" or radio=="taranisx9e" or radio=="taranisplus" or radio=="taranis" or radio=="x9d-simu" or radio=="x9d+-simu" or radio=="taranisx9e-simu" or radio=="taranisplus-simu" or radio=="taranis-simu" then
 		horizontalCharSpacing = 6
 		verticalCharSpacing   = 8
+		textSize = SMLSIZE
+		rowNumberOffset = 0
+	elseif radio=="x10" or radio=="x10s" or radio=="x10-simu" or radio=="x10s-simu" then 
+		horizontalCharSpacing = 15
+		verticalCharSpacing   = 20
+		textSize = 0
+		rowNumberOffset = 0
 	end
 	--xyBuffer[0] = {}
 	--xyBuffer[0][0] = "RaceFlight One Program Menu"
