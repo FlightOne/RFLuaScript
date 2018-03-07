@@ -14,6 +14,11 @@
 --##############################REF#################################################
 --sportTelemetryPush(0x0D,0x30,20,20) -- should justy make the data id a checksum
 
+--PROTOCOL 
+--When requesting data, dataid is currentscreen and row combined, with currentscreen being last 8bits row first 8bits, making 255 max number of screens and rows
+--16bits of value will be the command
+--fc will respond with the same dataid as well as the value to fill in
+
 local BUILD_NUMBER = 3
 --#############################Commmand defines#####################################
 local CMD_CHANGE_SCREEN = 1
@@ -26,36 +31,41 @@ local CMD_SUBTRACT_DATA  = 7
 local REPLYID = 0x30 --48 in dec
 local REQUESTID = 0x32 
 local SENSORID = 0x0D --13 in dec
-
---###############################Variables#######################################################
+local CMD_PRINT = 0x12
+local CMD_ERASE = 0x13 -- these are legacy
+--############################# General defines##################################################
+local LUA_STATUS_IDLE = 0
+local LUA_STATUS_EDITING = 1
+local LUA_STATUS_SAVING = 2
+--#############################  Psuedo defines##################################################
+-- these are only set once during init based on the radio type
+local textSize = SMLSIZE
 local horizontalCharSpacing = 6
 local verticalCharSpacing   = 10
+local leftSideOffset = 0
+local rowNumberOffset = 0
+--###############################Variables#######################################################
+
 local currentScreen = 1
 local currentRow = 1
-local luaStatus = "idle"
-local textSize = SMLSIZE
-local rowNumberOffset = 0
-local leftSideOffset = 0
 local lastRow = 1
-local rxBuffer  = {}
-local xyBuffer  = {}
+
+local luaStatus = LUA_STATUS_IDLE
+
 local dataCombined = 1
-local CMD_PRINT = 0x12
-local CMD_ERASE = 0x13
 local replyCheckSumLua = 0
 local tempNumVar = 0
 
+--These are also legacy
+local rxBuffer  = {}
+local xyBuffer  = {}
+
+--used for testing
 local testRXData = {0,0,CMD_CLEAR_SCREEN,4,2,0}
 local dataCombined = ( (bit32.lshift(testRXData[6],8)) + testRXData[5]) --turns the two 1 byte numbers into 1 16 bit number
 
---FIX would like to move these arrays to a seperate file at some point
---first byte command rest of bytes differ depending on command 
---if command is change screen, second byte is screen rest is data
---if command is print data second byte is row rest is data
---if command is exit screen exits
-
 --each needs a space for the > to go in
-local titleScreenArray = { "  Yaw PIDs", "  Roll PIDs", "  Pitch PIDs", "  Yaw Rate", "  Roll Rate", "  Pitch Rate", "  General", "  VTX", "Raceflight One Program Menu" } 
+local titleScreenArray = { "  Yaw PIDs 1/8", "  Roll PIDs 2/8", "  Pitch PIDs 3/8", "  Yaw Rate 4/8", "  Roll Rate 5/8", "  Pitch Rate 6/8", "  General 7/8", "  VTX 8/8", "Raceflight One Program Menu" } 
 
 
 local pidDataArray = { 20,20,20,20,20}
@@ -111,27 +121,29 @@ local function ChangeData(data)
 end
 
 local function FillPIDData()
-	lcd.drawText( ((rowOffset[currentScreen][1]) -1)*horizontalCharSpacing,(1 +rowNumberOffset)*verticalCharSpacing,pidDataArray[1], textSize)
-	lcd.drawText( ((rowOffset[currentScreen][2]) -1)*horizontalCharSpacing,(2 + rowNumberOffset)*verticalCharSpacing,pidDataArray[2], textSize)
-	lcd.drawText( ((rowOffset[currentScreen][3]) -1)*horizontalCharSpacing,(3 + rowNumberOffset)*verticalCharSpacing,pidDataArray[3], textSize)
-	lcd.drawText( ((rowOffset[currentScreen][4]) -1)*horizontalCharSpacing,(4 + rowNumberOffset)*verticalCharSpacing,pidDataArray[4], textSize)
-	lcd.drawText( ((rowOffset[currentScreen][5]) -1)*horizontalCharSpacing,(5 + rowNumberOffset)*verticalCharSpacing,pidDataArray[5], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][1]) -2)*horizontalCharSpacing,(1 +rowNumberOffset)*verticalCharSpacing,pidDataArray[1], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][2]) -2)*horizontalCharSpacing,(2 + rowNumberOffset)*verticalCharSpacing,pidDataArray[2], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][3]) -2)*horizontalCharSpacing,(3 + rowNumberOffset)*verticalCharSpacing,pidDataArray[3], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][4]) -2)*horizontalCharSpacing,(4 + rowNumberOffset)*verticalCharSpacing,pidDataArray[4], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][5]) -2)*horizontalCharSpacing,(5 + rowNumberOffset)*verticalCharSpacing,pidDataArray[5], textSize)
 end
 
 
 local function HandleKeyEvents(passedevent)
 	--Right now this is just looking for a key release to act
 
-	if luaStatus == "editing" then --we are editing so we need to increase and decrease the data
+	if luaStatus == LUA_STATUS_EDITING then --we are editing so we need to increase and decrease the data
 		if passedevent == EVT_MINUS_FIRST or passedevent == EVT_ROT_LEFT then
-			sportTelemetryPush(SENSORID,REQUESTID,currentRow,CMD_SUBTRACT_DATA)		
+			tempNumVar = currentRow + bit32.lshift(currentScreen,8)
+			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_SUBTRACT_DATA)		
 		end
 		if passedevent == EVT_PLUS_FIRST or passedevent == EVT_ROT_RIGHT then
-			sportTelemetryPush(SENSORID,REQUESTID,currentRow,CMD_ADD_DATA)		
+			tempNumVar = currentRow + bit32.lshift(currentScreen,8)
+			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_ADD_DATA)		
 		end
 	end
 
-	if luaStatus == "idle" then --idle means we need to navigate the menus
+	if luaStatus == LUA_STATUS_IDLE then --idle means we need to navigate the menus
 		if passedevent == EVT_MINUS_FIRST or passedevent == EVT_ROT_LEFT then
 			currentRow = currentRow + 1	
 		
@@ -141,9 +153,9 @@ local function HandleKeyEvents(passedevent)
 
 		elseif passedevent == EVT_ENTER_BREAK or passedevent == EVT_ROT_BREAK then
 			if currentRow == 6 then
-				luaStatus = "saving"
+				luaStatus = LUA_STATUS_SAVING
 			else
-				luaStatus = "editing"
+				luaStatus = LUA_STATUS_EDITING
 			end
 		
 
@@ -161,7 +173,7 @@ local function HandleKeyEvents(passedevent)
 	end
 	
 	if passedevent == EVT_EXIT_BREAK then --this runs outside of the ifs so we can always exit from editing mode 
-		luaStatus = "idle"	
+		luaStatus = LUA_STATUS_IDLE	
 	end
 
 	ValidateScreenAndRow()
@@ -191,11 +203,11 @@ local function DrawCursor() --this will draw the cursor based on current row
 	if currentRow ~= lastRow then
 		lcd.drawText((leftSideOffset + 0)*horizontalCharSpacing,(lastRow + rowNumberOffset)*verticalCharSpacing," ", textSize)	
 	end
-	if luaStatus == "idle" then
+	if luaStatus == LUA_STATUS_IDLE then
 		lcd.drawText((leftSideOffset + 0)*horizontalCharSpacing,(currentRow + rowNumberOffset)*verticalCharSpacing,">", textSize)
 	end
 
-	if luaStatus == "editing" then
+	if luaStatus == LUA_STATUS_EDITING then
 		lcd.drawText((leftSideOffset + 0)*horizontalCharSpacing,(currentRow + rowNumberOffset)*verticalCharSpacing,"*", textSize)
 	end
 
