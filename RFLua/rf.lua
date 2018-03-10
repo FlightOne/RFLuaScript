@@ -28,6 +28,7 @@ local CMD_CLEAR_SCREEN  = 4
 local CMD_REQUEST_DATA  = 5
 local CMD_ADD_DATA  = 6
 local CMD_SUBTRACT_DATA  = 7 
+local CMD_RECEIVE_COMPLETE  = 7 
 local REPLYID = 0x30 --48 in dec
 local REQUESTID = 0x32 
 local SENSORID = 0x0D --13 in dec
@@ -45,6 +46,11 @@ local verticalCharSpacing   = 10
 local leftSideOffset = 0
 local rowNumberOffset = 0
 --###############################Variables#######################################################
+
+
+local requestFillScreen=0
+local replyReceived=0
+local currentRequestedRow = 0
 
 local currentScreen = 1
 local currentRow = 1
@@ -96,6 +102,32 @@ local function isempty(s)
   return s == nil or s == ''
 end
 
+
+
+local function RequestFullScreen()
+	
+
+	local sId, fId, daId, value = sportTelemetryPop() -- polling for the telem packet
+	if fId == REPLYID and sId == 0x0D then
+
+		dataCombined = ( (bit32.lshift(rxBuffer[6],8)) + rxBuffer[5]) --turns the two 1 byte numbers into 1 16 bit number
+		ChangeData(dataCombined, currentRequestedRow) --Renders data to screen
+	end
+
+	if requestFillScreen and replyReceived then
+		tempNumVar = currentRequestedRow + bit32.lshift(currentScreen,8)
+		sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_REQUEST_DATA) -- we supply the screen and row we are on and the FC returns the data for that row
+		replyReceived = 0
+		currentRequestedRow = currentRequestedRow + 1
+		if currentRequestedRow == LUAMAXROWS then 
+			requestFillScreen=0
+			replyReceived=0
+			currentRequestedRow = 0
+			sportTelemetryPush(SENSORID,REQUESTID,currentScreen,CMD_RECEIVE_COMPLETE) -- lets the fc know that the screen is done drawing
+		end
+	end
+end
+
 local function ValidateScreenAndRow()
 	if currentRow < 1 then 
 		currentRow = 6
@@ -116,8 +148,8 @@ local function ValidateScreenAndRow()
 	--return(passedScreen,passedRow)
 end
 
-local function ChangeData(data)
-	lcd.drawText( ((rowOffset[currentScreen][currentRow]) -1)*horizontalCharSpacing,(currentRow + rowNumberOffset)*verticalCharSpacing,data, textSize)
+local function ChangeData(data, passedCurrentRow)
+	lcd.drawText( ((rowOffset[currentScreen][passedCurrentRow]) -1)*horizontalCharSpacing,(passedCurrentRow + rowNumberOffset)*verticalCharSpacing,data, textSize)
 end
 
 local function FillPIDData()
@@ -134,12 +166,12 @@ local function HandleKeyEvents(passedevent)
 
 	if luaStatus == LUA_STATUS_EDITING then --we are editing so we need to increase and decrease the data
 		if passedevent == EVT_MINUS_FIRST or passedevent == EVT_ROT_LEFT then
-			tempNumVar = currentRow + bit32.lshift(currentScreen,8)
-			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_SUBTRACT_DATA)		
+			--tempNumVar = currentRow + bit32.lshift(currentScreen,8)
+			--sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_SUBTRACT_DATA)		
 		end
 		if passedevent == EVT_PLUS_FIRST or passedevent == EVT_ROT_RIGHT then
-			tempNumVar = currentRow + bit32.lshift(currentScreen,8)
-			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_ADD_DATA)		
+			--tempNumVar = currentRow + bit32.lshift(currentScreen,8)
+			--sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_ADD_DATA)		
 		end
 	end
 
@@ -293,7 +325,8 @@ local function RunUi(event)
 	HandleKeyEvents(event)
 	HandleMenuChoice(currentScreen)
 	DrawCursor()
-	FillPIDData()
+	--FillPIDData()
+	RequestFullScreen()
 
 	--if getValue("RSSI") == 0 then
 	--	lcd.clear()
