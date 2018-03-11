@@ -28,12 +28,13 @@ local CMD_CLEAR_SCREEN  = 4
 local CMD_REQUEST_DATA  = 5
 local CMD_ADD_DATA  = 6
 local CMD_SUBTRACT_DATA  = 7 
-local CMD_RECEIVE_COMPLETE  = 7 
-local REPLYID = 0x30 --48 in dec
-local REQUESTID = 0x32 
+local CMD_RECEIVE_COMPLETE  = 8 
+local REPLYID = 0x32 -- 50
+local REQUESTID = 0x30  --48 in dec 
 local SENSORID = 0x0D --13 in dec
-local CMD_PRINT = 0x12
+local CMD_PRINT = 0x12 -- these are legacy
 local CMD_ERASE = 0x13 -- these are legacy
+local LUAMAXROWS = 6
 --############################# General defines##################################################
 local LUA_STATUS_IDLE = 0
 local LUA_STATUS_EDITING = 1
@@ -78,7 +79,7 @@ local pidDataArray = { 20,20,20,20,20}
 --need to preserve a space before all the screen rows so that theres room for the cursor
 -- these will need to match what the FC expects, each array will be used to draw a buffered screen, with the data being filled in by the FC and logic and Cursor moving done by FC
 -- x9d has max of 6 rows 
-local pidScreenArray  = { "   P:", "   I:", "   D:", "   Filter:", "   GA:", "   Save and Exit" } --this will be used for multiple pid screens
+local pidScreenArray  = { "   P: ", "   I:", "   D: ", "   Filter:", "   GA: ", "   Save and Exit" } --this will be used for multiple pid screens
 local rateScreenArray  = { "    Rate:", "   Expo:", "   Acro:", "   DeadBand:", "  ", "   Save and Exit" } --this will be used for multiple rate screens
 local generalScreenArray  = { "   RcSmooth:", "   I Limit:", "   D Limit:", "   CG:", "  ", "   Save and Exit" } --this will be used for the general page
 local vtxScreenArray  = { "   Band:", "   Channel:", "   Power:", "   Exit Pitmode", "  ", "   Save and exit" } --this will be used for the VTX page
@@ -108,10 +109,26 @@ local function RequestFullScreen()
 	
 
 	local sId, fId, daId, value = sportTelemetryPop() -- polling for the telem packet
-	if fId == REPLYID and sId == 0x0D then
-
+	lcd.drawText(13*horizontalCharSpacing,(1 + rowNumberOffset)*verticalCharSpacing,tostring(sId), 0)
+	lcd.drawText(13*horizontalCharSpacing,(2 + rowNumberOffset)*verticalCharSpacing,tostring(fId), 0)
+	lcd.drawText(13*horizontalCharSpacing,(3 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[1]), 0)
+	lcd.drawText(13*horizontalCharSpacing,(4 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[3]), 0)
+	lcd.drawText(13*horizontalCharSpacing,(5 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[4]), 0)
+	lcd.drawText(13*horizontalCharSpacing,(6 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[5]), 0)
+	lcd.drawText(13*horizontalCharSpacing,(7 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[6]), 0)
+	if fId == 0x32  then
+		lcd.drawText(16*horizontalCharSpacing,(0 + rowNumberOffset),"reply", INVERS)
+		rxBuffer = {}
+		rxBuffer[1] = bit32.band(daId,0xFF)
+		rxBuffer[2] = bit32.band(bit32.rshift(daId,8),0xFF)
+		rxBuffer[3] = bit32.band(value,0xFF)
+		rxBuffer[4] = bit32.band(bit32.rshift(value,8 ),0xFF)
+		rxBuffer[5] = bit32.band(bit32.rshift(value,16),0xFF)
+		rxBuffer[6] = bit32.band(bit32.rshift(value,24),0xFF)
 		dataCombined = ( (bit32.lshift(rxBuffer[6],8)) + rxBuffer[5]) --turns the two 1 byte numbers into 1 16 bit number
-		ChangeData(dataCombined, currentRequestedRow) --Renders data to screen
+		pidDataArray[currentRequestedRow] = rxBuffer[3]
+		--ChangeData(dataCombined, currentRequestedRow) --Renders data to screen
+		replyReceived = 1
 	end
 
 	if requestFillScreen and replyReceived then
@@ -119,11 +136,57 @@ local function RequestFullScreen()
 		sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_REQUEST_DATA) -- we supply the screen and row we are on and the FC returns the data for that row
 		replyReceived = 0
 		currentRequestedRow = currentRequestedRow + 1
-		if currentRequestedRow == LUAMAXROWS then 
+		if currentRequestedRow > LUAMAXROWS then 
 			requestFillScreen=0
 			replyReceived=0
 			currentRequestedRow = 0
 			sportTelemetryPush(SENSORID,REQUESTID,currentScreen,CMD_RECEIVE_COMPLETE) -- lets the fc know that the screen is done drawing
+		end
+	end
+end
+
+
+local function PollAndFillData()
+	
+
+	--used for debugging
+	lcd.drawText(13*horizontalCharSpacing,(1 + rowNumberOffset)*verticalCharSpacing,tostring(sId), 0)
+	lcd.drawText(13*horizontalCharSpacing,(2 + rowNumberOffset)*verticalCharSpacing,tostring(fId), 0)
+	lcd.drawText(13*horizontalCharSpacing,(3 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[1]), 0)
+	lcd.drawText(13*horizontalCharSpacing,(4 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[3]), 0)
+	lcd.drawText(13*horizontalCharSpacing,(5 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[4]), 0)
+	lcd.drawText(13*horizontalCharSpacing,(6 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[5]), 0)
+	lcd.drawText(13*horizontalCharSpacing,(7 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[6]), 0)
+
+
+	local sId, fId, daId, value = sportTelemetryPop() -- polling for the telem packet
+	
+	if fId == REPLYID   then
+		lcd.drawText(16*horizontalCharSpacing,(0 + rowNumberOffset),"reply", INVERS)
+		rxBuffer = {}
+		rxBuffer[1] = bit32.band(daId,0xFF)
+		rxBuffer[2] = bit32.band(bit32.rshift(daId,8),0xFF)
+		rxBuffer[3] = bit32.band(value,0xFF)
+		rxBuffer[4] = bit32.band(bit32.rshift(value,8 ),0xFF)
+		rxBuffer[5] = bit32.band(bit32.rshift(value,16),0xFF)
+		rxBuffer[6] = bit32.band(bit32.rshift(value,24),0xFF)
+		dataCombined = ( (bit32.lshift(rxBuffer[6],8)) + rxBuffer[5]) --turns the two 1 byte numbers into 1 16 bit number
+		
+		--ChangeData(dataCombined, currentRequestedRow) --Renders data to screen
+		replyReceived = 1 --tells us we got a packet and it should be processed
+	end
+
+	if requestFillScreen then
+
+		if replyReceived then --if we got a reply then lets set the data 
+			pidDataArray[currentRequestedRow] = rxBuffer[3] -- we se the requested row to the latest data
+			requestFillScreen=0
+			replyReceived=0
+			sportTelemetryPush(SENSORID,REQUESTID,currentScreen,CMD_RECEIVE_COMPLETE) -- lets the fc know that the screen is done drawing
+			return
+		else -- if we have not reveived a valid packet yet then send a request packet again
+			tempNumVar = currentRequestedRow + bit32.lshift(currentScreen,8)
+			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_REQUEST_DATA) -- we supply the screen and row we are on and the FC returns the data for that row
 		end
 	end
 end
@@ -153,11 +216,11 @@ local function ChangeData(data, passedCurrentRow)
 end
 
 local function FillPIDData()
-	lcd.drawText( ((rowOffset[currentScreen][1]) -2)*horizontalCharSpacing,(1 +rowNumberOffset)*verticalCharSpacing,pidDataArray[1], textSize)
-	lcd.drawText( ((rowOffset[currentScreen][2]) -2)*horizontalCharSpacing,(2 + rowNumberOffset)*verticalCharSpacing,pidDataArray[2], textSize)
-	lcd.drawText( ((rowOffset[currentScreen][3]) -2)*horizontalCharSpacing,(3 + rowNumberOffset)*verticalCharSpacing,pidDataArray[3], textSize)
-	lcd.drawText( ((rowOffset[currentScreen][4]) -2)*horizontalCharSpacing,(4 + rowNumberOffset)*verticalCharSpacing,pidDataArray[4], textSize)
-	lcd.drawText( ((rowOffset[currentScreen][5]) -2)*horizontalCharSpacing,(5 + rowNumberOffset)*verticalCharSpacing,pidDataArray[5], textSize)
+	lcd.drawText( ((rowOffset[currentScreen][1]) -2)*horizontalCharSpacing,(1 +rowNumberOffset)*verticalCharSpacing,tostring(pidDataArray[1]), textSize)
+	lcd.drawText( ((rowOffset[currentScreen][2]) -2)*horizontalCharSpacing,(2 + rowNumberOffset)*verticalCharSpacing,tostring(pidDataArray[2]), textSize)
+	lcd.drawText( ((rowOffset[currentScreen][3]) -2)*horizontalCharSpacing,(3 + rowNumberOffset)*verticalCharSpacing,tostring(pidDataArray[3]), textSize)
+	lcd.drawText( ((rowOffset[currentScreen][4]) -2)*horizontalCharSpacing,(4 + rowNumberOffset)*verticalCharSpacing,tostring(pidDataArray[4]), textSize)
+	lcd.drawText( ((rowOffset[currentScreen][5]) -2)*horizontalCharSpacing,(5 + rowNumberOffset)*verticalCharSpacing,tostring(pidDataArray[5]), textSize)
 end
 
 
@@ -166,12 +229,18 @@ local function HandleKeyEvents(passedevent)
 
 	if luaStatus == LUA_STATUS_EDITING then --we are editing so we need to increase and decrease the data
 		if passedevent == EVT_MINUS_FIRST or passedevent == EVT_ROT_LEFT then
-			--tempNumVar = currentRow + bit32.lshift(currentScreen,8)
-			--sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_SUBTRACT_DATA)		
+			tempNumVar = currentRow + bit32.lshift(currentScreen,8)
+			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_SUBTRACT_DATA)		
+			requestFillScreen = 1
+			replyReceived=0
+			currentRequestedRow=currentRow 
 		end
 		if passedevent == EVT_PLUS_FIRST or passedevent == EVT_ROT_RIGHT then
-			--tempNumVar = currentRow + bit32.lshift(currentScreen,8)
-			--sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_ADD_DATA)		
+			tempNumVar = currentRow + bit32.lshift(currentScreen,8)
+			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_ADD_DATA)		
+			requestFillScreen = 1
+			replyReceived=0
+			currentRequestedRow=currentRow 
 		end
 	end
 
@@ -325,8 +394,10 @@ local function RunUi(event)
 	HandleKeyEvents(event)
 	HandleMenuChoice(currentScreen)
 	DrawCursor()
-	--FillPIDData()
-	RequestFullScreen()
+	FillPIDData()
+	--RequestFullScreen()
+	PollAndFillData()
+	lcd.drawText(13*horizontalCharSpacing,(0 + rowNumberOffset),dataCombined, INVERS)
 
 	--if getValue("RSSI") == 0 then
 	--	lcd.clear()
