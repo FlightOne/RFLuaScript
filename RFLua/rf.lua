@@ -26,9 +26,10 @@ local CMD_CHANGE_DATA  =  2
 local CMD_EXIT  = 3 
 local CMD_CLEAR_SCREEN  = 4
 local CMD_REQUEST_DATA  = 5
-local CMD_ADD_DATA  = 6
-local CMD_SUBTRACT_DATA  = 7 
-local CMD_RECEIVE_COMPLETE  = 8 
+local CMD_ADD_DATA  = 6 
+local CMD_SUBTRACT_DATA = 7
+local CMD_RECEIVE_COMPLETE  = 8
+local CMD_PUSH_DATA  = 9 
 local REPLYID = 0x32 -- 50
 local REQUESTID = 0x30  --48 in dec 
 local SENSORID = 0x0D --13 in dec
@@ -39,6 +40,7 @@ local LUAMAXROWS = 6
 local LUA_STATUS_IDLE = 0
 local LUA_STATUS_EDITING = 1
 local LUA_STATUS_SAVING = 2
+local LUA_STATUS_FILL_SCREEN = 3
 --#############################  Psuedo defines##################################################
 -- these are only set once during init based on the radio type
 local textSize = SMLSIZE
@@ -48,6 +50,7 @@ local leftSideOffset = 0
 local rowNumberOffset = 0
 --###############################Variables#######################################################
 
+local debugVar = "blah"
 
 local requestFillScreen=0
 local replyReceived=0
@@ -62,6 +65,7 @@ local luaStatus = LUA_STATUS_IDLE
 local dataCombined = 1
 local replyCheckSumLua = 0
 local tempNumVar = 0
+local luaSendData = 0
 
 --These are also legacy
 local rxBuffer  = {}
@@ -103,6 +107,54 @@ local function isempty(s)
   return s == nil or s == ''
 end
 
+local function PushLuaData()
+	
+	
+	local sId, fId, daId, value = sportTelemetryPop() -- polling for the telem packet
+	
+	if fId == REPLYID   then
+		--lcd.drawText(16*horizontalCharSpacing,(0 + rowNumberOffset),"PUSH", INVERS)
+		rxBuffer = {}
+		rxBuffer[1] = bit32.band(daId,0xFF)
+		rxBuffer[2] = bit32.band(bit32.rshift(daId,8),0xFF)
+		rxBuffer[3] = bit32.band(value,0xFF)
+		rxBuffer[4] = bit32.band(bit32.rshift(value,8 ),0xFF)
+		rxBuffer[5] = bit32.band(bit32.rshift(value,16),0xFF)
+		rxBuffer[6] = bit32.band(bit32.rshift(value,24),0xFF)
+		dataCombined = ( (bit32.lshift(rxBuffer[6],8)) + rxBuffer[5]) --turns the two 1 byte numbers into 1 16 bit number
+		
+		--ChangeData(dataCombined, currentRequestedRow) --Renders data to screen
+		replyReceived = 1 --tells us we got a packet and it should be processed
+	end
+
+
+	if sendData and luaStatus == LUA_STATUS_SAVING then
+		
+		if replyReceived then
+			--pidDataArray[currentRequestedRow] = rxBuffer[3] -- we se the requested row to the latest data
+			replyReceived = 0
+			currentRequestedRow = currentRequestedRow + 1
+			tempNumVar = currentRequestedRow + bit32.lshift(currentScreen,8)
+			--luaSendData = CMD_PUSH_DATA + bit32.lshift(pidDataArray[currentRequestedRow],8)
+			luaSendData = CMD_PUSH_DATA + bit32.lshift(8,8)
+			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,luaSendData) -- we supply the screen and row we are on and the FC returns the data for that row
+		else
+			tempNumVar = currentRequestedRow + bit32.lshift(currentScreen,8)
+			--luaSendData = CMD_PUSH_DATA + bit32.lshift(pidDataArray[currentRequestedRow],8)
+			luaSendData = CMD_PUSH_DATA + bit32.lshift(8,8)
+			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,luaSendData) -- we supply the screen and row we are on and the FC returns the data for that row
+			--lcd.drawText(16*horizontalCharSpacing,(0 + rowNumberOffset),"polling", INVERS)
+			debugVar = "pushing"
+		end
+
+		if currentRequestedRow > LUAMAXROWS then 
+			requestFillScreen=0
+			replyReceived=0
+			currentRequestedRow = 0
+			sportTelemetryPush(SENSORID,REQUESTID,currentScreen,CMD_RECEIVE_COMPLETE) -- lets the fc know that the screen is done drawing
+		end
+	end
+end
 
 
 local function RequestFullScreen()
@@ -116,8 +168,9 @@ local function RequestFullScreen()
 	lcd.drawText(13*horizontalCharSpacing,(5 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[4]), 0)
 	lcd.drawText(13*horizontalCharSpacing,(6 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[5]), 0)
 	lcd.drawText(13*horizontalCharSpacing,(7 + rowNumberOffset)*verticalCharSpacing,tostring(rxBuffer[6]), 0)
-	if fId == 0x32  then
-		lcd.drawText(16*horizontalCharSpacing,(0 + rowNumberOffset),"reply", INVERS)
+	if fId == REPLYID  then
+		--lcd.drawText(16*horizontalCharSpacing,(0 + rowNumberOffset),"reply", INVERS)
+		debugVar = "reply"
 		rxBuffer = {}
 		rxBuffer[1] = bit32.band(daId,0xFF)
 		rxBuffer[2] = bit32.band(bit32.rshift(daId,8),0xFF)
@@ -131,11 +184,21 @@ local function RequestFullScreen()
 		replyReceived = 1
 	end
 
-	if requestFillScreen and replyReceived then
-		tempNumVar = currentRequestedRow + bit32.lshift(currentScreen,8)
-		sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_REQUEST_DATA) -- we supply the screen and row we are on and the FC returns the data for that row
-		replyReceived = 0
-		currentRequestedRow = currentRequestedRow + 1
+	if requestFillScreen and luaStatus == LUA_STATUS_IDLE then
+		
+		if replyReceived then
+			tempNumVar = currentRequestedRow + bit32.lshift(currentScreen,8)
+			pidDataArray[currentRequestedRow] = rxBuffer[3] -- we se the requested row to the latest data
+			replyReceived = 0
+			currentRequestedRow = currentRequestedRow + 1
+			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_REQUEST_DATA) -- we supply the screen and row we are on and the FC returns the data for that row
+		else
+			tempNumVar = currentRequestedRow + bit32.lshift(currentScreen,8)
+			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_REQUEST_DATA) -- we supply the screen and row we are on and the FC returns the data for that row
+			--lcd.drawText(16*horizontalCharSpacing,(0 + rowNumberOffset),"polling", INVERS)
+			debugVar = "polling"
+		end
+
 		if currentRequestedRow > LUAMAXROWS then 
 			requestFillScreen=0
 			replyReceived=0
@@ -175,7 +238,6 @@ local function PollAndFillData()
 		--ChangeData(dataCombined, currentRequestedRow) --Renders data to screen
 		replyReceived = 1 --tells us we got a packet and it should be processed
 	end
-
 	if requestFillScreen then
 
 		if replyReceived then --if we got a reply then lets set the data 
@@ -231,16 +293,21 @@ local function HandleKeyEvents(passedevent)
 		if passedevent == EVT_MINUS_FIRST or passedevent == EVT_ROT_LEFT then
 			tempNumVar = currentRow + bit32.lshift(currentScreen,8)
 			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_SUBTRACT_DATA)		
-			requestFillScreen = 1
-			replyReceived=0
-			currentRequestedRow=currentRow 
+
+			if(requestFillScreen == 0) then
+				requestFillScreen = 1
+				--replyReceived=0
+				currentRequestedRow=currentRow
+			end 
 		end
 		if passedevent == EVT_PLUS_FIRST or passedevent == EVT_ROT_RIGHT then
 			tempNumVar = currentRow + bit32.lshift(currentScreen,8)
 			sportTelemetryPush(SENSORID,REQUESTID,tempNumVar,CMD_ADD_DATA)		
-			requestFillScreen = 1
-			replyReceived=0
-			currentRequestedRow=currentRow 
+			if(requestFillScreen == 0) then
+				requestFillScreen = 1
+				--replyReceived=0
+				currentRequestedRow=currentRow
+			end
 		end
 	end
 
@@ -255,6 +322,8 @@ local function HandleKeyEvents(passedevent)
 		elseif passedevent == EVT_ENTER_BREAK or passedevent == EVT_ROT_BREAK then
 			if currentRow == 6 then
 				luaStatus = LUA_STATUS_SAVING
+				sendData = 1
+				currentRequestedRow = 0
 			else
 				luaStatus = LUA_STATUS_EDITING
 			end
@@ -390,14 +459,15 @@ end
 
 local function RunUi(event)
 
-	ProccessCommand()
+	--ProccessCommand()
 	HandleKeyEvents(event)
 	HandleMenuChoice(currentScreen)
 	DrawCursor()
 	FillPIDData()
-	--RequestFullScreen()
-	PollAndFillData()
-	lcd.drawText(13*horizontalCharSpacing,(0 + rowNumberOffset),dataCombined, INVERS)
+	RequestFullScreen()
+	PushLuaData()
+	--PollAndFillData()
+	lcd.drawText(16*horizontalCharSpacing,(0 + rowNumberOffset),debugVar, INVERS)
 
 	--if getValue("RSSI") == 0 then
 	--	lcd.clear()
