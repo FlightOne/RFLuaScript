@@ -128,9 +128,9 @@ local function PushLuaData()
 	end
 
 
-	if sendData and luaStatus == LUA_STATUS_SAVING then
+	if sendData == 1 and luaStatus == LUA_STATUS_SAVING then
 		
-		if replyReceived then
+		if replyReceived == 1 then
 			--pidDataArray[currentRequestedRow] = rxBuffer[3] -- we se the requested row to the latest data
 			replyReceived = 0
 			currentRequestedRow = currentRequestedRow + 1
@@ -184,9 +184,9 @@ local function RequestFullScreen()
 		replyReceived = 1
 	end
 
-	if requestFillScreen and luaStatus == LUA_STATUS_IDLE then
+	if requestFillScreen == 1  then
 		
-		if replyReceived then
+		if replyReceived == 1 then
 			tempNumVar = currentRequestedRow + bit32.lshift(currentScreen,8)
 			pidDataArray[currentRequestedRow] = rxBuffer[3] -- we se the requested row to the latest data
 			replyReceived = 0
@@ -238,9 +238,9 @@ local function PollAndFillData()
 		--ChangeData(dataCombined, currentRequestedRow) --Renders data to screen
 		replyReceived = 1 --tells us we got a packet and it should be processed
 	end
-	if requestFillScreen then
+	if requestFillScreen == 1 then
 
-		if replyReceived then --if we got a reply then lets set the data 
+		if replyReceived == 1 then --if we got a reply then lets set the data 
 			pidDataArray[currentRequestedRow] = rxBuffer[3] -- we se the requested row to the latest data
 			requestFillScreen=0
 			replyReceived=0
@@ -297,8 +297,10 @@ local function HandleKeyEvents(passedevent)
 			if(requestFillScreen == 0) then
 				requestFillScreen = 1
 				--replyReceived=0
-				currentRequestedRow=currentRow
+				currentRequestedRow=0
+				killEvents(passedevent);
 			end 
+			killEvents(passedevent);
 		end
 		if passedevent == EVT_PLUS_FIRST or passedevent == EVT_ROT_RIGHT then
 			tempNumVar = currentRow + bit32.lshift(currentScreen,8)
@@ -306,8 +308,10 @@ local function HandleKeyEvents(passedevent)
 			if(requestFillScreen == 0) then
 				requestFillScreen = 1
 				--replyReceived=0
-				currentRequestedRow=currentRow
+				currentRequestedRow=0
+				
 			end
+			killEvents(passedevent);
 		end
 	end
 
@@ -460,6 +464,8 @@ end
 local function RunUi(event)
 
 	--ProccessCommand()
+	lcd.clear()
+	lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
 	HandleKeyEvents(event)
 	HandleMenuChoice(currentScreen)
 	DrawCursor()
@@ -468,6 +474,7 @@ local function RunUi(event)
 	PushLuaData()
 	--PollAndFillData()
 	lcd.drawText(16*horizontalCharSpacing,(0 + rowNumberOffset),debugVar, INVERS)
+	lcd.drawText(20*horizontalCharSpacing,(0 + rowNumberOffset),requestFillScreen, INVERS)
 
 	--if getValue("RSSI") == 0 then
 	--	lcd.clear()
@@ -496,6 +503,9 @@ local function InitUi()
 	end
 	--xyBuffer[0] = {}
 	--xyBuffer[0][0] = "RaceFlight One Program Menu"
+	lcd.clear()
+	lcd.drawFilledRectangle(0, 0, LCD_W, verticalCharSpacing)
+	requestFillScreen = 1
 end
 
 return {init=InitUi, run=RunUi}
